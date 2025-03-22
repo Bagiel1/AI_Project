@@ -153,6 +153,75 @@ class Optimizer_Adagrad:
     def post_update_params(self):
         self.iterations += 1
 
+class Optimizer_RMSprop:
+    def __init__(self, learning_rate=0.02, decay=1e-5, epsilon=1e-7, rho=0.999):
+        self.learning_rate= learning_rate
+        self.current_learning_rate= learning_rate
+        self.decay= decay
+        self.iterations= 0
+        self.epsilon= epsilon
+        self.rho= rho
+
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate = self.current_learning_rate * (1./(1.+self.decay*self.iterations))
+    
+    def update_params(self, layer):
+        if not hasattr(layer, "weight_cache"):
+            layer.weight_cache= np.zeros_like(layer.weights)
+            layer.bias_cache= np.zeros_like(layer.bias)
+
+        layer.weight_cache= self.rho * layer.weight_cache + (1-self.rho) * layer.dweights**2
+        layer.bias_cache= self.rho * layer.bias_cache + (1-self.rho) * layer.dbias**2
+
+        layer.weights += -self.current_learning_rate * layer.dweights / (np.sqrt(layer.weight_cache) + self.epsilon)
+        layer.bias += -self.current_learning_rate * layer.dbias / (np.sqrt(layer.bias_cache) + self.epsilon)
+
+    def post_update_params(self):
+        self.iterations += 1
+
+class Optimizer_Adam:
+    def __init__(self, learning_rate=0.001, decay=0., epsilon=1e-7, beta_1=0.9, beta_2=0.999):
+        self.learning_rate= learning_rate
+        self.current_learning_rate= learning_rate
+        self.decay= decay
+        self.epsilon= epsilon
+        self.iterations= 0
+        self.beta_1= beta_1
+        self.beta_2= beta_2
+    
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate= self.learning_rate * (1/(1+self.decay*self.iterations))
+        
+    def update_params(self, layer):
+        if not hasattr(layer, 'weight_cache'):
+            layer.weight_momentums= np.zeros_like(layer.weights)
+            layer.weight_cache= np.zeros_like(layer.weights)
+            layer.bias_momentums= np.zeros_like(layer.bias)
+            layer.bias_cache= np.zeros_like(layer.bias)
+        
+        layer.weight_momentums= self.beta_1 * layer.weight_momentums + (1-self.beta_1) * layer.dweights
+        layer.bias_momentums= self.beta_1 * layer.bias_momentums + (1-self.beta_1) * layer.dbias
+        
+        weight_momentums_corrected= layer.weight_momentums / (1-self.beta_1**(self.iterations+1))
+        bias_momentums_corrected= layer.bias_momentums / (1-self.beta_1**(self.iterations+1))
+
+        layer.weight_cache= self.beta_2 * layer.weight_cache + (1-self.beta_2) * layer.dweights**2
+        layer.bias_cache= self.beta_2 * layer.bias_cache + (1-self.beta_2) * layer.dbias**2
+
+        weight_cache_corrected= layer.weight_cache / (1-self.beta_2**(self.iterations+1))
+        bias_cache_corrected= layer.bias_cache / (1-self.beta_2**(self.iterations+1))
+
+        layer.weights += -self.current_learning_rate * weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + self.epsilon)
+        layer.bias += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
+
+    def post_update_params(self):
+        self.iterations += 1
+        
+
+        
+
 
 
 X,Y= spiral_data(samples=100, classes=3)
@@ -191,34 +260,36 @@ for epoch in range(10001):
     optimizer.update_params(dense1)
     optimizer.update_params(dense2)
     optimizer.post_update_params()
+
+
     
 
 
 
-
-
+#########################################################################################################
 '''
-inputs= [[1, 2, 3, 2.5], [2.0,5.0,-1.0,2.0], [-1.5, 2.7, 3.3, -0.8]]
-weights= [[0.2, 0.8, -0.5, 1.0], [0.5, -0.91, 0.26, -0.5], [-0.26, -0.27, 0.17, 0.87]]
-bias= [2,3,0.5]
+Optimizers:
 
-weights2= [[0.1, -0.14, 0.5], [-0.5, 0.12, -0.33], [-0.44, 0.73, -0.13]]
-bias2= [-1,2,-0.5]
+SGD - Stochastic Gradient Descent:
+Learning Rate= 1
+Parameters - LearningRate*ParametersGradients
 
-layer1_output= np.dot(inputs,np.array(weights).T) + bias
+SGDM - Stochastic Gradient Descent with Momentum:
+Weight_Updates= self.momentum * layer.weight_momentum - self.current_learning_rate * layer.dweights
+layer.weight_momentum= weight_updates
+layer.weight += weight_updates
 
-layer2_output= np.dot(layer1_output,np.array(weights2).T) + bias2
+AdaGrad - Adaptative Gradiente:
+Cache += Parm_gradient ** 2
+parm_updates= learning_rate * parm_gradient / (sqrt(cache) + eps)
 
-print(layer2_output)
-'''
 
-'''
-for neuron_weights, neuron_bias in zip(weights, bias):
-    neuron_output= 0
-    for n_input, weight in zip(inputs, neuron_weights):
-        neuron_output += n_input*weight
-    neuron_output += neuron_bias
-    layer_output.append(neuron_output)
+RMSProp - Root Mean Square Propagation:
+Cache = rho * cache + (1-rho) * gradient ** 2
+parm_updates= learning_rate * parm_gradient / (sqrt(cache) + eps)
 
-print(layer_output)
+
+Adam - Adaptative Momentum:
+
+
 '''
